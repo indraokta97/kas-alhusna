@@ -37,6 +37,17 @@ async function kvSet(key: string, value: string): Promise<boolean> {
   return response.ok;
 }
 
+async function kvDel(key: string): Promise<boolean> {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return false;
+  const response = await fetch(`${url}/del/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.ok;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
 
@@ -51,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === "POST") {
     const { action, pin } = (req.body ?? {}) as { action?: string; pin?: string };
-    if (typeof pin !== "string" || !/^\d{4,6}$/.test(pin)) {
+    if (action !== "reset" && (typeof pin !== "string" || !/^\d{4,6}$/.test(pin))) {
       return res.status(400).json({ error: "PIN harus 4-6 angka." });
     }
 
@@ -59,6 +70,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (action === "set") {
         const hash = await hashPin(pin);
         const ok = await kvSet(KEY, hash);
+        if (!ok) return res.status(503).json({ error: "Penyimpanan bersama belum tersedia." });
+        return res.status(200).json({ ok: true });
+      }
+      if (action === "reset") {
+        const ok = await kvDel(KEY);
         if (!ok) return res.status(503).json({ error: "Penyimpanan bersama belum tersedia." });
         return res.status(200).json({ ok: true });
       }
