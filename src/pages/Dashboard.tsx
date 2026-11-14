@@ -41,7 +41,7 @@ export function Dashboard() {
 
   return (
     <div className="overflow-hidden">
-      <header className="relative overflow-hidden rounded-b-[26px] bg-brand px-5 pb-4 pt-[calc(env(safe-area-inset-top)_+_12px)] text-white">
+      <header className="relative overflow-hidden rounded-b-[26px] bg-brand px-5 pb-2 pt-[calc(env(safe-area-inset-top)_+_12px)] text-white">
         <img
           src="/hero.jpeg"
           alt=""
@@ -183,7 +183,7 @@ export function Dashboard() {
       )}
 
       {hasData ? (
-        <div className={`mt-0 flex justify-center px-4 ${isBendahara ? "mb-0" : "mb-0"}`}>
+        <div className={`mt-0 flex justify-end px-4 ${isBendahara ? "mb-0" : "mb-0"}`}>
           <img
             src="/ropik-2.webp"
             alt=""
