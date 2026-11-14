@@ -19,20 +19,24 @@ async function kvGet(key: string): Promise<string | null> {
   });
   if (!response.ok) return null;
   const data = (await response.json()) as { result?: string | null };
-  return data.result ?? null;
+  const result = data.result ?? null;
+  if (typeof result === "string" && result.startsWith('"') && result.endsWith('"')) {
+    try {
+      return JSON.parse(result) as string;
+    } catch {
+      return result.slice(1, -1);
+    }
+  }
+  return result;
 }
 
 async function kvSet(key: string, value: string): Promise<boolean> {
   const url = process.env.KV_REST_API_URL;
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return false;
-  const response = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(value),
+  const response = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
   });
   return response.ok;
 }
