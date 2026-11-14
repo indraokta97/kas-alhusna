@@ -212,10 +212,7 @@ export function LoginDialog() {
               </button>
             </div>
 
-            <p className="mt-3 text-[11px] leading-relaxed text-muted">
-              PIN tersimpan di perangkat ini, bukan akun server. Kunci ini mencegah perubahan tak
-              sengaja, bukan mengenkripsi data.
-            </p>
+
           </form>
         </div>
       </div>
