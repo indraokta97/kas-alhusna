@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiHasPin, apiSetPin, apiVerifyPin } from "./pinApi";
+import { apiHasPin, apiResetPin, apiSetPin, apiVerifyPin } from "./pinApi";
 
 const PIN_KEY = "kas-alhusna:pin-hash";
 const SESSION_KEY = "kas-alhusna:bendahara";
@@ -16,11 +16,13 @@ interface AuthValue {
   isBendahara: boolean;
   hasPin: boolean;
   authLoading: boolean;
+  backendAvailable: boolean;
   isLoginOpen: boolean;
   openLogin: () => void;
   closeLogin: () => void;
   login: (pin: string) => Promise<boolean>;
   savePin: (pin: string) => Promise<void>;
+  resetPin: () => Promise<void>;
   logout: () => void;
 }
 
@@ -139,6 +141,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [backendAvailable, setSession],
   );
 
+  const resetPin = useCallback(async () => {
+    if (backendAvailable) {
+      const ok = await apiResetPin();
+      if (ok === null) {
+        write(PIN_KEY, null, localStorage);
+      }
+    } else {
+      write(PIN_KEY, null, localStorage);
+    }
+    setHasPin(false);
+    setSession(false);
+  }, [backendAvailable, setSession]);
+
   const logout = useCallback(() => setSession(false), [setSession]);
 
   const value = useMemo<AuthValue>(
@@ -146,14 +161,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isBendahara,
       hasPin: hasPin ?? false,
       authLoading,
+      backendAvailable,
       isLoginOpen,
       openLogin,
       closeLogin,
       login,
       savePin,
+      resetPin,
       logout,
     }),
-    [isBendahara, hasPin, authLoading, isLoginOpen, openLogin, closeLogin, login, savePin, logout],
+    [
+      isBendahara,
+      hasPin,
+      authLoading,
+      backendAvailable,
+      isLoginOpen,
+      openLogin,
+      closeLogin,
+      login,
+      savePin,
+      resetPin,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

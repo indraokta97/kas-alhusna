@@ -41,3 +41,18 @@ export async function apiSetPin(pin: string): Promise<boolean | null> {
     return null;
   }
 }
+
+export async function apiResetPin(): Promise<boolean | null> {
+  try {
+    const response = await fetch("/api/pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reset" }),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { ok?: boolean };
+    return Boolean(data.ok);
+  } catch {
+    return null;
+  }
+}

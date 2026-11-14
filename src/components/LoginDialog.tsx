@@ -63,7 +63,15 @@ function PinField({
 }
 
 export function LoginDialog() {
-  const { hasPin, authLoading, isLoginOpen, closeLogin, login, savePin } = useAuth();
+  const {
+    hasPin,
+    authLoading,
+    isLoginOpen,
+    closeLogin,
+    login,
+    savePin,
+    resetPin,
+  } = useAuth();
   const [view, setView] = useState<View>(hasPin ? "login" : "setup");
   const [pin, setPin] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -194,6 +202,22 @@ export function LoginDialog() {
               </p>
             ) : null}
 
+
+            {hasPin ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  await resetPin();
+                  setView("setup");
+                  setPin("");
+                  setConfirmation("");
+                  setError(null);
+                }}
+                className="mt-3 min-h-11 text-[12px] font-semibold text-brand"
+              >
+                Lupa PIN?
+              </button>
+            ) : null}
 
             <div className="mt-4 grid grid-cols-2 gap-2.5">
               <button
