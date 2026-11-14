@@ -63,7 +63,7 @@ function PinField({
 }
 
 export function LoginDialog() {
-  const { hasPin, isLoginOpen, closeLogin, login, savePin } = useAuth();
+  const { hasPin, authLoading, isLoginOpen, closeLogin, login, savePin } = useAuth();
   const [view, setView] = useState<View>(hasPin ? "login" : "setup");
   const [pin, setPin] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -87,6 +87,16 @@ export function LoginDialog() {
   }, [isLoginOpen]);
 
   if (!isLoginOpen) return null;
+
+  if (authLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/45">
+        <div className="rounded-2xl bg-surface p-6 text-center shadow-xl">
+          <p className="text-[13px] font-semibold text-ink">Memeriksa PIN…</p>
+        </div>
+      </div>
+    );
+  }
 
   const copy = COPY[view];
   const needsConfirmation = view !== "login";

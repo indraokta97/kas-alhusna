@@ -2,10 +2,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+import { apiHasPin, apiSetPin, apiVerifyPin } from "./pinApi";
 
 const PIN_KEY = "kas-alhusna:pin-hash";
 const SESSION_KEY = "kas-alhusna:bendahara";
@@ -13,6 +15,7 @@ const SESSION_KEY = "kas-alhusna:bendahara";
 interface AuthValue {
   isBendahara: boolean;
   hasPin: boolean;
+  authLoading: boolean;
   isLoginOpen: boolean;
   openLogin: () => void;
   closeLogin: () => void;
@@ -40,11 +43,6 @@ function write(key: string, value: string | null, storage: Storage): void {
   }
 }
 
-/**
- * PIN disimpan sebagai hash SHA-256 agar tidak terbaca sebagai teks biasa.
- * Ini kunci lokal untuk mencegah perubahan tak sengaja, bukan autentikasi server:
- * siapa pun yang bisa membuka data browser perangkat ini tetap bisa membacanya.
- */
 async function hashPin(pin: string): Promise<string> {
   const bytes = new TextEncoder().encode(`kas-alhusna:${pin}`);
   if (globalThis.crypto?.subtle) {
@@ -63,11 +61,35 @@ async function hashPin(pin: string): Promise<string> {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [hasPin, setHasPin] = useState(() => Boolean(read(PIN_KEY, localStorage)));
-  const [isBendahara, setIsBendahara] = useState(
-    () => Boolean(read(PIN_KEY, localStorage)) && read(SESSION_KEY, sessionStorage) === "1",
-  );
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [backendAvailable, setBackendAvailable] = useState(false);
+  const [isBendahara, setIsBendahara] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const apiResult = await apiHasPin();
+      if (cancelled) return;
+      if (apiResult !== null) {
+        setHasPin(apiResult);
+        setBackendAvailable(true);
+      } else {
+        setHasPin(Boolean(read(PIN_KEY, localStorage)));
+        setBackendAvailable(false);
+      }
+      setIsBendahara(
+        Boolean(read(PIN_KEY, localStorage)) && read(SESSION_KEY, sessionStorage) === "1",
+      );
+      // Jika backend tersedia, sesi lokal tetap berlaku; bendahara ditentukan oleh flag sesi.
+      setIsBendahara(read(SESSION_KEY, sessionStorage) === "1");
+      setAuthLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openLogin = useCallback(() => setIsLoginOpen(true), []);
   const closeLogin = useCallback(() => setIsLoginOpen(false), []);
@@ -77,21 +99,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     write(SESSION_KEY, active ? "1" : null, sessionStorage);
   }, []);
 
-  const login = useCallback(async (pin: string) => {
-    const stored = read(PIN_KEY, localStorage);
-    if (!stored) return false;
-    const matches = stored === (await hashPin(pin));
-    if (matches) setSession(true);
-    return matches;
-  }, [setSession]);
+  const login = useCallback(
+    async (pin: string) => {
+      if (backendAvailable) {
+        const ok = await apiVerifyPin(pin);
+        if (ok === null) {
+          // Fallback ke lokal bila API gagal.
+          const stored = read(PIN_KEY, localStorage);
+          const matches = stored === (await hashPin(pin));
+          if (matches) setSession(true);
+          return matches;
+        }
+        if (ok) setSession(true);
+        return ok;
+      }
+      const stored = read(PIN_KEY, localStorage);
+      if (!stored) return false;
+      const matches = stored === (await hashPin(pin));
+      if (matches) setSession(true);
+      return matches;
+    },
+    [backendAvailable, setSession],
+  );
 
   const savePin = useCallback(
     async (pin: string) => {
-      write(PIN_KEY, await hashPin(pin), localStorage);
+      if (backendAvailable) {
+        const ok = await apiSetPin(pin);
+        if (ok === null) {
+          // Fallback ke lokal.
+          write(PIN_KEY, await hashPin(pin), localStorage);
+        }
+      } else {
+        write(PIN_KEY, await hashPin(pin), localStorage);
+      }
       setHasPin(true);
       setSession(true);
     },
-    [setSession],
+    [backendAvailable, setSession],
   );
 
   const logout = useCallback(() => setSession(false), [setSession]);
@@ -99,7 +144,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthValue>(
     () => ({
       isBendahara,
-      hasPin,
+      hasPin: hasPin ?? false,
+      authLoading,
       isLoginOpen,
       openLogin,
       closeLogin,
@@ -107,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       savePin,
       logout,
     }),
-    [isBendahara, hasPin, isLoginOpen, openLogin, closeLogin, login, savePin, logout],
+    [isBendahara, hasPin, authLoading, isLoginOpen, openLogin, closeLogin, login, savePin, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
