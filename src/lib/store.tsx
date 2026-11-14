@@ -10,11 +10,13 @@ import {
 } from "react";
 import { loadData, saveData, EMPTY_DATA } from "./storage";
 import { buildSampleTransactions, createId } from "./sample";
+import { apiLoadData, apiSaveData } from "./dataApi";
 import type { AppData, Transaction, TransactionInput } from "./types";
 
 interface StoreValue {
   data: AppData;
   saveFailed: boolean;
+  backendAvailable: boolean;
   addTransaction: (input: TransactionInput) => string;
   updateTransaction: (id: string, input: TransactionInput) => void;
   deleteTransaction: (id: string) => void;
@@ -29,15 +31,54 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData());
   const [saveFailed, setSaveFailed] = useState(false);
+  const [backendAvailable, setBackendAvailable] = useState(false);
   const initialRender = useRef(true);
+  const skipNextSave = useRef(false);
+  const saveTimer = useRef<number | null>(null);
+
+  // Muat data bersama dari backend saat pertama kali (jika tersedia).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { backend, data: remote } = await apiLoadData();
+      if (cancelled) return;
+      setBackendAvailable(backend);
+      if (backend) {
+        if (remote) {
+          skipNextSave.current = true;
+          setData(remote);
+          saveData(remote);
+        } else {
+          // Belum ada data di server: dorong data lokal.
+          await apiSaveData(loadData());
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (initialRender.current) {
       initialRender.current = false;
       return;
     }
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
     setSaveFailed(!saveData(data));
-  }, [data]);
+
+    if (backendAvailable) {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => {
+        apiSaveData(data).then((ok) => {
+          if (!ok) setSaveFailed(true);
+        });
+      }, 600);
+    }
+  }, [data, backendAvailable]);
 
   const addTransaction = useCallback((input: TransactionInput) => {
     const id = createId();
@@ -66,10 +107,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setOrgName = useCallback((name: string) => {
-    const orgName = name.trim().slice(0, 80);
     setData((current) => ({
       ...current,
-      settings: { ...current.settings, orgName: orgName || current.settings.orgName },
+      settings: { ...current.settings, orgName: name.trim().slice(0, 80) || current.settings.orgName },
     }));
   }, []);
 
@@ -92,6 +132,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => ({
       data,
       saveFailed,
+      backendAvailable,
       addTransaction,
       updateTransaction,
       deleteTransaction,
@@ -103,6 +144,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       data,
       saveFailed,
+      backendAvailable,
       addTransaction,
       updateTransaction,
       deleteTransaction,
